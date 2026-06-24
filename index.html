@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400&display=swap" rel="stylesheet">
+
+<style>
+
+body{
+margin:0;
+overflow:hidden;
+background:#fcfbf7;
+}
+
+canvas{
+display:block;
+}
+
+</style>
+
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<script>
+
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+
+let W,H;
+
+function resize(){
+W=canvas.width=innerWidth;
+H=canvas.height=innerHeight;
+
+layout();
+
+}
+
+window.addEventListener("resize",resize);
+
+const poem=`
+Life begins with lullabies,
+and grows into laughter and running feet.
+
+Then come ringing phones,
+rushing trains,
+and hearts that skip and break.
+
+Soon, life hums with keyboards,
+boiling kettles,
+and tired sighs after long days.
+
+And in the end,
+when the world grows quiet,
+it is the birds, the breeze,
+and distant voices of love—
+
+that remind us,
+
+Life was never counted in years,
+but in the sounds we carried along the way.
+`;
+
+
+
+let strings=[];
+function layout(){
+
+strings=[];
+
+ctx.font="13px Cormorant Garamond";
+
+const chars = poem.replace(/\n/g," ");
+
+let index=0;
+
+let x = 40;
+
+while(index < chars.length){
+
+    let len = 20;
+
+    let string = {
+
+        x,
+
+        angle:0,
+        velocity:0,
+
+        spring:.008,
+        damping:.96,
+
+        letters:[]
+    };
+
+    for(let i=0;i<len;i++){
+
+        if(index >= chars.length) break;
+
+        string.letters.push({
+
+            char: chars[index],
+
+            offset: i*18
+
+        });
+
+        index++;
+
+    }
+
+    strings.push(string);
+
+    x += 28;
+
+}
+
+}
+resize();
+let particles=[];
+
+for(let i=0;i<100;i++){
+
+particles.push({
+
+x:Math.random()*innerWidth,
+y:Math.random()*innerHeight,
+
+vx:(Math.random()-.5)*.2,
+vy:(Math.random()-.5)*.2,
+
+r:Math.random()*1.5
+
+});
+
+}
+let prevX=0;
+let mouseSpeed=0;
+let pointer={
+
+x:-1000,
+y:-1000
+
+};
+let lastBell = 0;
+let lastMove=0;
+let activeString = -1;
+let rippleCenter = -1000;
+let rippleStrength = 0;
+function updatePointer(x,y){
+
+   
+rippleCenter = x;
+
+mouseSpeed = Math.abs(x-prevX);
+
+prevX = x;
+
+rippleCenter = x;
+
+rippleStrength = Math.min(
+    mouseSpeed * 0.001,
+    0.03
+);
+
+pointer.x = x;
+pointer.y = y;
+
+lastMove = Date.now();
+}
+
+window.addEventListener("pointermove",e=>{
+
+    updatePointer(
+        e.clientX,
+        e.clientY
+    );
+
+});
+
+window.addEventListener(
+"touchmove",
+e=>{
+
+    updatePointer(
+        e.touches[0].clientX,
+        e.touches[0].clientY
+    );
+
+},
+{passive:true});
+let breeze=0;
+
+function animate(){
+
+requestAnimationFrame(animate);
+rippleStrength *= .985;
+ctx.clearRect(0,0,W,H);
+
+const gradient =
+ctx.createRadialGradient(
+
+pointer.x,
+pointer.y,
+0,
+
+pointer.x,
+pointer.y,
+250
+
+);
+
+gradient.addColorStop(
+0,
+"rgba(255,230,180,.08)"
+);
+
+gradient.addColorStop(
+1,
+"rgba(255,230,180,0)"
+);
+
+ctx.fillStyle = gradient;
+
+ctx.fillRect(
+0,
+0,
+W,
+H
+);
+breeze+=.004;
+particles.forEach(p=>{
+
+    p.x+=p.vx;
+    p.y+=p.vy;
+
+    if(p.x<0)p.x=W;
+    if(p.x>W)p.x=0;
+
+    if(p.y<0)p.y=H;
+    if(p.y>H)p.y=0;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        p.x,
+        p.y,
+        p.r,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fillStyle="rgba(220,180,80,.12)";
+
+    ctx.fill();
+
+});
+ctx.font="13px Cormorant Garamond";
+
+strings.forEach((string,index)=>{
+
+    const dx = pointer.x - string.x;
+
+const distance = Math.abs(dx);
+const rippleDistance =
+Math.abs(
+    string.x-rippleCenter
+);
+
+if(rippleDistance < 300){
+string.velocity +=
+rippleStrength *
+0.02 *
+(1-rippleDistance/300);
+}
+if(distance < 40){
+
+    if(
+        activeString !== index &&
+        mouseSpeed > 3 &&
+        audioReady
+    ){
+
+     if(
+    Date.now()-lastBell > 200
+){
+
+    playBell();
+
+    lastBell=Date.now();
+
+}
+
+
+activeString=index;
+
+    }
+
+}else if(activeString === index){
+
+    activeString = -1;
+
+}
+
+if(distance < 200){
+
+    const force =
+        (200-distance)/200;
+
+string.velocity +=
+dx *
+0.00015 *
+force *
+(1+mouseSpeed*0.02);
+
+}
+
+string.velocity +=
+    -string.angle * string.spring;
+
+string.velocity *=
+    string.damping;
+
+string.angle += string.velocity;
+
+if(Math.abs(string.velocity)<0.00005){
+
+    string.velocity = 0;
+
+}
+
+if(index>0){
+
+    string.velocity +=
+        (strings[index-1].angle-string.angle)
+        *0.00003;
+
+}
+
+if(index<strings.length-1){
+
+    string.velocity +=
+        (strings[index+1].angle-string.angle)
+        *0.00003;
+
+}
+
+
+    ctx.save();
+
+    ctx.translate(
+        string.x,
+        20
+    );
+
+    ctx.rotate(
+        string.angle
+    );
+
+    ctx.strokeStyle=
+    "rgba(0,0,0,.08)";
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        0,
+        -50
+    );
+
+    ctx.lineTo(
+        0,
+        0
+    );
+
+    ctx.stroke();
+        string.letters.forEach(letter=>{
+
+ctx.shadowBlur = 0;
+
+ctx.fillStyle="#111";
+
+        ctx.fillText(
+
+            letter.char,
+
+            0,
+
+            letter.offset
+
+        );
+});
+
+ctx.restore();
+});
+
+}
+let bells=[];
+
+for(let i=1;i<=5;i++){
+
+    bells.push(
+        new Audio(
+            "sounds/bell"+i+".wav"
+        )
+    );
+
+}
+function playBell(){
+if(!audioReady) return;
+    const bell =
+    bells[
+        Math.floor(
+            Math.random()*bells.length
+        )
+    ];
+
+    bell.currentTime=0;
+
+    bell.volume=.015;
+
+    bell.play();
+
+}
+
+let audioReady = false;
+
+window.addEventListener("click",()=>{
+
+    bells.forEach(b=>{
+
+        b.volume=0;
+        b.play().then(()=>{
+            b.pause();
+            b.currentTime=0;
+        });
+
+    });
+
+    audioReady = true;
+
+},{once:true});
+
+animate();
+
+
+</script>
+
+</body>
+</html>
